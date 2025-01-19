@@ -1,0 +1,50 @@
+# Binaries for programs and plugins
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
+
+# Executable files
+/build/
+bin/
+
+# Dependency directories (for vendoring)
+vendor/
+
+# GoLand project files
+.idea/
+*.iml
+
+# Go-specific files
+*.cover
+*.tmp
+*.prof
+
+# Test binary artifacts
+*.test
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs and debugging artifacts
+*.log
+*.trace
+
+# Environment files
+.env
+.env.*
+
+# Cache
+.cache/
+*.swp
+*.swo
+*~
+
+# Generated files
+dist/
+*.bak
+
+# Coverage data
+coverage.out
