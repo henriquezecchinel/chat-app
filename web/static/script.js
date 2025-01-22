@@ -1,6 +1,7 @@
-const apiBaseUrl = "http://localhost:8080"; // Backend API base URL
-let jwtToken = ""; // Store the JWT token
-let currentChatroomId = null; // Active chatroom ID
+const apiBaseUrl = "http://localhost:8080";
+let jwtToken = "";
+let currentChatroomId = null;
+let ws = null;
 
 // Register User
 document.getElementById("register-form").addEventListener("submit", async (e) => {
@@ -37,7 +38,7 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
         const data = await res.json();
         jwtToken = data.token;
         alert("Login successful!");
-        fetchChatrooms(); // Fetch chatrooms after login
+        fetchChatrooms();
     } else {
         alert("Login failed.");
     }
@@ -65,7 +66,6 @@ document.getElementById("create-chatroom-form").addEventListener("submit", async
     }
 });
 
-// Fetch Available Chatrooms
 async function fetchChatrooms() {
     const res = await fetch(`${apiBaseUrl}/chatroom/list`, {
         method: "GET",
@@ -77,7 +77,7 @@ async function fetchChatrooms() {
     if (res.ok) {
         const data = await res.json();
         const chatroomList = document.getElementById("chatroom-list");
-        chatroomList.innerHTML = ""; // Clear existing chatrooms
+        chatroomList.innerHTML = "";
 
         data.chatrooms.forEach((chatroom) => {
             const li = document.createElement("li");
@@ -92,14 +92,6 @@ async function fetchChatrooms() {
     }
 }
 
-// Join Chatroom and Fetch Last Messages
-async function joinChatroom(chatroomId, chatroomName) {
-    currentChatroomId = chatroomId;
-    document.getElementById("chat-window").innerHTML = `<h3>${chatroomName}</h3>`; // Set chatroom name
-    fetchLastMessages(chatroomId);
-}
-
-// Fetch Last Messages for the Chatroom
 async function fetchLastMessages(chatroomId) {
     const res = await fetch(`${apiBaseUrl}/chatroom/messages?chatroom_id=${chatroomId}`, {
         method: "GET",
@@ -111,53 +103,80 @@ async function fetchLastMessages(chatroomId) {
     if (res.ok) {
         const data = await res.json();
         const chatWindow = document.getElementById("chat-window");
-        chatWindow.innerHTML = ""; // Clear existing messages
+        chatWindow.innerHTML = "";
 
-        data.messages.forEach((msg) => {
-            const messageDiv = document.createElement("div");
-            console.log(msg);
-            messageDiv.innerText = `[${new Date(msg.timestamp).toLocaleTimeString()}] ${msg.content}`;
-            chatWindow.appendChild(messageDiv);
-        });
-
-        chatWindow.scrollTop = chatWindow.scrollHeight; // Auto-scroll to bottom
+        if (data.messages) {
+            data.messages.reverse().forEach((msg) => {
+                const messageDiv = document.createElement("div");
+                // TODO: Convert 'user_id' to 'username' [it must be changed in the backend as well]
+                messageDiv.innerText = `(${new Date(msg.timestamp).toLocaleTimeString()}) User ${msg.user_id}: ${msg.content}`;
+                chatWindow.appendChild(messageDiv);
+            });
+        }
     } else {
         alert("Failed to fetch messages.");
     }
 }
 
 // Send Chat Message
-document.getElementById("chat-form").addEventListener("submit", async (e) => {
+document.getElementById("chat-form").addEventListener("submit", (e) => {
     e.preventDefault();
-    const message = document.getElementById("chat-message").value;
+    const messageContent = document.getElementById("chat-message").value;
 
     if (!currentChatroomId) {
         alert("Please select a chatroom first.");
         return;
     }
 
-    // Store the message via API
-    const res = await fetch(`${apiBaseUrl}/chatroom/post_message`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${jwtToken}`,
-        },
-        body: JSON.stringify({
-            chatroom_id: currentChatroomId,
-            content: message,
-        }),
-    });
-
-    if (res.ok) {
-        // Add the message to the chat window
-        const chatWindow = document.getElementById("chat-window");
-        const messageDiv = document.createElement("div");
-        messageDiv.innerText = `You: ${message}`;
-        chatWindow.insertBefore(messageDiv, chatWindow.firstChild);
-
-        document.getElementById("chat-message").value = ""; // Clear input
-    } else {
-        alert("Failed to send message.");
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        alert("WebSocket connection is not open. Please refresh the page or select the chatroom again.");
+        return;
     }
+
+    const message = { content: messageContent };
+    ws.send(JSON.stringify(message));
+
+    document.getElementById("cat-message").value = "";
 });
+
+async function joinChatroom(chatroomId, chatroomName) {
+    currentChatroomId = chatroomId;
+    document.getElementById("chat-window").innerHTML = `<h3>${chatroomName}</h3>`; // Set chatroom name
+
+    await fetchLastMessages(chatroomId);
+
+    setupWebSocket(chatroomId);
+}
+
+
+function setupWebSocket(chatroomId) {
+    // Properly close the existing WebSocket before creating a new one
+    if (ws) {
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+        }
+    }
+
+    // IMPORTANT: This code is for demonstration purposes only.
+    // In a real-world application, we should avoid using query parameters for sensitive data such as token.
+    // We can use different approaches like using HTTP Handshake or sending the first message with the Auth details.
+    ws = new WebSocket(`ws://localhost:8080/ws?chatroom_id=${chatroomId}&token=${jwtToken}`);
+
+    ws.onmessage = (event) => {
+        const chatWindow = document.getElementById("chat-window");
+        const data = JSON.parse(event.data);
+        const messageDiv = document.createElement("div");
+        messageDiv.innerText = `(${new Date().toLocaleTimeString()}) ${data.message}`;
+        chatWindow.appendChild(messageDiv);
+        chatWindow.scrollTop = chatWindow.scrollHeight; // Auto-scroll to bottom
+    };
+
+    ws.onerror = (event) => {
+        console.error("WebSocket error:", event);
+        alert("WebSocket connection failed!");
+    };
+
+    ws.onclose = () => {
+        console.log("WebSocket connection closed.");
+    };
+}

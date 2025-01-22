@@ -8,16 +8,28 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 
 	"chat-app/internal/auth"
 	"chat-app/internal/chat"
 	"chat-app/internal/storage"
+
+	"github.com/gorilla/websocket"
 )
 
 var (
 	authRepo     *auth.UserRepository
 	chatroomRepo *chat.ChatroomRepository
 	messageRepo  *chat.MessageRepository
+
+	clients      = make(map[int]map[*websocket.Conn]bool) // Chatroom ID => WebSocket connections
+	clientsMutex = sync.RWMutex{}
+	upgrader     = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			// Allow connections from all origins (use only in dev!)
+			return true
+		},
+	}
 )
 
 func main() {
@@ -45,11 +57,111 @@ func main() {
 	http.Handle("/chatroom/post_message", auth.AuthMiddleware(http.HandlerFunc(handlePostMessage)))
 	http.Handle("/chatroom/messages", auth.AuthMiddleware(http.HandlerFunc(handleGetMessages)))
 
-	// TODO: Add WebSocket handlers for real-time chat functionality.
+	http.HandleFunc("/ws", handleWebSocket)
+
+	http.Handle("/", http.FileServer(http.Dir("./web/static")))
 
 	log.Println("Chat server is running on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal("Failed to start server:", err)
+	}
+}
+
+func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// IMPORTANT: This code is for demonstration purposes only.
+	// In a real-world application, we should avoid using query parameters for sensitive data such as token.
+	// We can use different approaches like using HTTP Handshake or sending the first message with the Auth details.
+	tokenString := r.URL.Query().Get("token")
+	if tokenString == "" {
+		log.Println("Missing token parameter")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	claims, err := auth.ValidateJWT(tokenString)
+	if err != nil {
+		log.Printf("Invalid JWT token: %v", err)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	userID := claims.UserID
+
+	chatroomIDStr := r.URL.Query().Get("chatroom_id")
+	if chatroomIDStr == "" {
+		http.Error(w, "Missing chatroom_id", http.StatusBadRequest)
+		return
+	}
+
+	chatroomID := atoi(chatroomIDStr)
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade error: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	addClientToChatroom(conn, chatroomID)
+	defer removeClientFromChatroom(conn, chatroomID)
+
+	// Start handling WebSocket messages
+	for {
+		var msg struct {
+			Content string `json:"content"`
+		}
+		err := conn.ReadJSON(&msg)
+		if err != nil {
+			log.Printf("WebSocket read error: %v", err)
+			break
+		}
+
+		if err := messageRepo.AddMessage(r.Context(), chatroomID, userID, msg.Content); err != nil {
+			log.Println("Failed to store message in the DB:", err)
+			continue
+		}
+
+		broadcastMessageToChatroom(chatroomID, fmt.Sprintf("User %d: %s", userID, msg.Content))
+	}
+}
+
+func addClientToChatroom(conn *websocket.Conn, chatroomID int) {
+	clientsMutex.Lock()
+	defer clientsMutex.Unlock()
+
+	if clients[chatroomID] == nil {
+		clients[chatroomID] = make(map[*websocket.Conn]bool)
+	}
+	clients[chatroomID][conn] = true
+}
+
+func removeClientFromChatroom(conn *websocket.Conn, chatroomID int) {
+	clientsMutex.Lock()
+	defer clientsMutex.Unlock()
+
+	if _, ok := clients[chatroomID]; ok {
+		delete(clients[chatroomID], conn)
+		if len(clients[chatroomID]) == 0 {
+			delete(clients, chatroomID)
+		}
+	}
+}
+
+func broadcastMessageToChatroom(chatroomID int, content string) {
+	clientsMutex.RLock()
+	defer clientsMutex.RUnlock()
+
+	if chatroomClients, ok := clients[chatroomID]; ok {
+		for client := range chatroomClients {
+			err := client.WriteJSON(map[string]string{
+				"message": content,
+			})
+			if err != nil {
+				log.Println("WebSocket broadcast error:", err)
+				client.Close()
+				delete(chatroomClients, client)
+			}
+		}
 	}
 }
 
