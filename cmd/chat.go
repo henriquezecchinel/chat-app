@@ -4,17 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/joho/godotenv"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"chat-app/internal/auth"
 	"chat-app/internal/chat"
+	"chat-app/internal/messaging"
 	"chat-app/internal/storage"
 
 	"github.com/gorilla/websocket"
+	"github.com/streadway/amqp"
 )
 
 var (
@@ -30,17 +34,22 @@ var (
 			return true
 		},
 	}
+
+	chatRabbitMQ *messaging.RabbitMQ
 )
 
 func main() {
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
+	var err error
 
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", dbUser, dbPassword, dbHost, dbPort, dbName)
-	db, err := storage.NewDB(connStr)
+	chatRabbitMQ, err = messaging.SetupRabbitMQ("stock_requests", "stock_responses")
+	if err != nil {
+		log.Fatal("chatRabbitMQ setup failed:", err)
+	}
+	defer chatRabbitMQ.Close()
+
+	go consumeStockResponses()
+
+	db, err := setupDatabaseConnection()
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
@@ -58,12 +67,61 @@ func main() {
 	http.Handle("/chatroom/messages", auth.AuthMiddleware(http.HandlerFunc(handleGetMessages)))
 
 	http.HandleFunc("/ws", handleWebSocket)
-
 	http.Handle("/", http.FileServer(http.Dir("./web/static")))
 
 	log.Println("Chat server is running on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		log.Fatal("Failed to start server:", err)
+	}
+}
+
+func setupDatabaseConnection() (*storage.DB, error) {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", dbUser, dbPassword, dbHost, dbPort, dbName)
+	db, err := storage.NewDB(connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func consumeStockResponses() {
+	msgs, err := chatRabbitMQ.Channel.Consume(
+		"stock_responses",
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatal("Failed to start consuming stock_responses:", err)
+	}
+
+	for msg := range msgs {
+		var response struct {
+			ChatroomID int    `json:"chatroom_id"`
+			Message    string `json:"message"`
+		}
+
+		if err := json.Unmarshal(msg.Body, &response); err != nil {
+			log.Println("Failed to unmarshal stock response:", err)
+			continue
+		}
+
+		broadcastMessageToChatroom(response.ChatroomID, response.Message)
 	}
 }
 
@@ -112,16 +170,48 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		err := conn.ReadJSON(&msg)
 		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
+			log.Printf("WebSocket read error for chatroom: %v", err)
 			break
 		}
 
-		if err := messageRepo.AddMessage(r.Context(), chatroomID, userID, msg.Content); err != nil {
-			log.Println("Failed to store message in the DB:", err)
-			continue
-		}
+		if strings.HasPrefix(msg.Content, "/stock=") {
+			stockCode := strings.TrimPrefix(msg.Content, "/stock=")
+			stockRequest := map[string]interface{}{
+				"chatroom_id": chatroomID,
+				"stock_code":  stockCode,
+			}
 
-		broadcastMessageToChatroom(chatroomID, fmt.Sprintf("User %d: %s", userID, msg.Content))
+			sendStockRequestToQueue(stockRequest)
+		} else {
+			if err := messageRepo.AddMessage(r.Context(), chatroomID, userID, msg.Content); err != nil {
+				log.Println("Failed to store message in the DB:", err)
+				continue
+			}
+
+			broadcastMessageToChatroom(chatroomID, fmt.Sprintf("User %d: %s", userID, msg.Content))
+		}
+	}
+}
+
+func sendStockRequestToQueue(request map[string]interface{}) {
+	body, err := json.Marshal(request)
+	if err != nil {
+		log.Println("Failed to marshal stock request:", err)
+		return
+	}
+
+	err = chatRabbitMQ.Channel.Publish(
+		"",
+		"stock_requests",
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+	if err != nil {
+		log.Println("Failed to publish stock request:", err)
 	}
 }
 

@@ -2,6 +2,8 @@ services:
   chat-app:
     image: golang:1.23-alpine
     container_name: chat-app
+    networks:
+      - chat-network
     working_dir: /chat-app
     ports:
       - "8080:8080"
@@ -19,10 +21,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   bot-app:
     image: golang:1.23-alpine
     container_name: bot-app
+    networks:
+      - chat-network
     working_dir: /bot-app
     ports:
       - "8081:8081"
@@ -40,10 +46,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   postgres:
     image: postgres:15
     container_name: postgres
+    networks:
+      - chat-network
     ports:
       - "5432:5432"
     environment:
@@ -59,9 +69,11 @@ services:
       timeout: 5s
       retries: 5
 
-  rabbitmq: # Placeholder, not being used yet.
+  rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
+    networks:
+      - chat-network
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -70,7 +82,16 @@ services:
       - RABBITMQ_DEFAULT_PASS=guest
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmqctl status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
   rabbitmq_data:
+
+networks:
+  chat-network:
+    driver: bridge

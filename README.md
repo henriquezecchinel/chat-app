@@ -33,57 +33,39 @@ This project is a browser-based chat application built using Go. It is designed 
 - [RabbitMQ](https://www.rabbitmq.com/) running (provided in the docker file)
 - [PostgreSQL](https://www.postgresql.org/) running (provided in the docker file)
 
+
 ### Steps
 Create a `.env` file in the root directory based on the provided `.env.example` file.
 
-Work in progress!
+Run `make run-chat` to start the chat application.
+
+Run `make run-bot` to start the bot application.
+
+If you have issues with dependencies, run `make install` to install the dependencies.
+
+#### chat-app
+- The chat application runs on `localhost:8080`.
+- Simply open the provided web interface in your browser to start chatting.
+1. Register a new user
+2. Log in with the registered user
+3. Create or join a chatroom
+4. Start chatting!
+
+#### bot-app
+- The bot application runs on `localhost:8081`.
+- The bot listens to messages in the `stock_requests` queue and responds with stock quotes in the `stock_responses` queue.
+- Simply send the `/stock=stock_code` command in the chatroom to receive stock quotes.
+- Example: `/stock=aapl.us`
+
 
 ## Testing
 Work in progress!
 
-## API Usage
-- Stock quotes can be fetched using the command format `/stock=stock_code`.
-- Example: `/stock=aapl.us`
 
 ## Notes
 - The `/stock` command does not persist in the database.
 - The frontend is intentionally minimal, focusing on backend functionality.
 
+
 ## Author
 - [Henrique Zecchinel](mailto:henriquezecchinel@gmail.com)
-
-## Dev Notes
-The app is still being developed, so some features may not be implemented yet. The README will be updated as the project progresses.
-
-Below are some available Testing Endpoints:
-1. Register a User:
-> curl -X POST -H "Content-Type: application/json" \ \
-> -d '{"username": "testuser", "password": "testpass"}' \ \
-> http://localhost:8080/register 
- 
-1. Login:
-> curl -X POST -H "Content-Type: application/json" \ \
-> -d '{"username": "testuser", "password": "testpass"}' \ \
-> http://localhost:8080/login
-
-1. Create a Chatroom:
->   curl -X POST -H "Content-Type: application/json" \ \
->   -d '{"name": "General"}' \ \
->   http://localhost:8080/chatroom/create \ \
->   -H "Authorization: Bearer \<token>"
- 
-1. List all Chatrooms:
-> curl -X GET http://localhost:8080/chatroom/list \ \
-> -H "Authorization: Bearer \<token>"
-
-1. Post a Message to a Chatroom:
-> curl -X POST -H "Content-Type: application/json" \ \
-> -d '{"chatroom_id": 1, "user_id": 1, "content": "Hello, World!"}' \ \
-> http://localhost:8080/chatroom/post_message \ \
-> -H "Authorization: Bearer \<token>"
-
-1. Fetch recent Messages from a Chatroom:
-> curl -X GET "http://localhost:8080/chatroom/messages?chatroom_id=1" \ \
-> -H "Authorization: Bearer \<token>"
-
-# Work in Progress!
