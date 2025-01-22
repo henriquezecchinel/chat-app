@@ -1,4 +1,4 @@
-package auth
+package repository
 
 import (
 	"context"
@@ -9,11 +9,11 @@ import (
 )
 
 type UserRepository struct {
-	db *sql.DB
+	DB *sql.DB
 }
 
 func NewUserRepository(db *sql.DB) *UserRepository {
-	return &UserRepository{db: db}
+	return &UserRepository{DB: db}
 }
 
 func (repo *UserRepository) Register(ctx context.Context, username, password string) error {
@@ -22,7 +22,7 @@ func (repo *UserRepository) Register(ctx context.Context, username, password str
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	_, err = repo.db.ExecContext(ctx, `
+	_, err = repo.DB.ExecContext(ctx, `
         INSERT INTO Users (username, hashed_password)
         VALUES ($1, $2)
     `, username, string(hashedPassword))
@@ -36,7 +36,7 @@ func (repo *UserRepository) Register(ctx context.Context, username, password str
 func (repo *UserRepository) Login(ctx context.Context, username, password string) error {
 	var hashedPassword string
 
-	err := repo.db.QueryRowContext(ctx, `
+	err := repo.DB.QueryRowContext(ctx, `
         SELECT hashed_password
         FROM Users
         WHERE username = $1
@@ -52,4 +52,26 @@ func (repo *UserRepository) Login(ctx context.Context, username, password string
 	}
 
 	return nil
+}
+
+func (repo *UserRepository) Authenticate(ctx context.Context, username, password string) (int, error) {
+	var hashedPassword string
+	var userID int
+
+	err := repo.DB.QueryRowContext(ctx, `
+        SELECT id, hashed_password
+        FROM users
+        WHERE username = $1
+    `, username).Scan(&userID, &hashedPassword)
+	if err == sql.ErrNoRows {
+		return 0, fmt.Errorf("user does not exist")
+	} else if err != nil {
+		return 0, fmt.Errorf("database error: %w", err)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)); err != nil {
+		return 0, fmt.Errorf("invalid password")
+	}
+
+	return userID, nil
 }

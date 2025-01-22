@@ -1,4 +1,4 @@
-package main
+package bot
 
 import (
 	"chat-app/internal/bot"
@@ -8,7 +8,7 @@ import (
 
 var botRabbitMQ *messaging.RabbitMQ
 
-func main() {
+func RunBot() error {
 	var err error
 
 	botRabbitMQ, err = messaging.SetupRabbitMQ("stock_requests", "stock_responses")
@@ -18,4 +18,6 @@ func main() {
 	defer botRabbitMQ.Close()
 
 	bot.ConsumeStockRequests(botRabbitMQ)
+
+	return nil
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 
 	"github.com/joho/godotenv"
 	"github.com/streadway/amqp"
@@ -15,9 +17,11 @@ type RabbitMQ struct {
 }
 
 func SetupRabbitMQ(queueNames ...string) (*RabbitMQ, error) {
-	var err error
+	_, b, _, _ := runtime.Caller(0)
+	basePath := filepath.Dir(b)
+	envPath := filepath.Join(basePath, "../../.env")
 
-	err = godotenv.Load()
+	err := godotenv.Load(envPath)
 	if err != nil {
 		panic("Error loading .env file")
 	}

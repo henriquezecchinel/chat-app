@@ -45,3 +45,7 @@ format:
 	@echo "Formatting code..."
 	gofmt -s -w .
 	goimports -w .
+
+test:
+	@echo "Running tests..."
+	go test ./...

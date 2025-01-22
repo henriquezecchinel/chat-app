@@ -17,7 +17,7 @@ services:
       - RABBITMQ_PORT=5672
     volumes:
       - .:/chat-app # Mounts source code for live updates
-    command: ["go", "run", "cmd/chat.go"] # Runs the chat application
+    command: ["go", "run", "cmd/main.go", "-app=chat"] # Runs the chat application
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,7 +42,7 @@ services:
       - RABBITMQ_PORT=5672
     volumes:
       - .:/bot-app # Mounts source code for live updates
-    command: ["go", "run", "cmd/bot.go"] # Runs the bot application
+    command: ["go", "run", "cmd/main.go", "-app=bot"] # Runs the bot application
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,14 +1,11 @@
 package auth
 
 import (
-	"context"
-	"database/sql"
 	"errors"
-	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
@@ -17,7 +14,11 @@ import (
 var jwtSecret string
 
 func init() {
-	err := godotenv.Load()
+	_, b, _, _ := runtime.Caller(0)
+	basePath := filepath.Dir(b)
+	envPath := filepath.Join(basePath, "../../.env")
+
+	err := godotenv.Load(envPath)
 	if err != nil {
 		panic("Error loading .env file")
 	}
@@ -61,26 +62,4 @@ func ValidateJWT(tokenString string) (*Claims, error) {
 	}
 
 	return nil, errors.New("invalid claims")
-}
-
-func (repo *UserRepository) Authenticate(ctx context.Context, username, password string) (int, error) {
-	var hashedPassword string
-	var userID int
-
-	err := repo.db.QueryRowContext(ctx, `
-        SELECT id, hashed_password
-        FROM users
-        WHERE username = $1
-    `, username).Scan(&userID, &hashedPassword)
-	if err == sql.ErrNoRows {
-		return 0, fmt.Errorf("user does not exist")
-	} else if err != nil {
-		return 0, fmt.Errorf("database error: %w", err)
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password)); err != nil {
-		return 0, fmt.Errorf("invalid password")
-	}
-
-	return userID, nil
 }

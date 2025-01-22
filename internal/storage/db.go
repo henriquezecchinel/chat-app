@@ -3,8 +3,9 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq" // Required for the PostgreSQL driver
@@ -32,9 +33,13 @@ func (db *DB) Close() error {
 }
 
 func SetupDatabaseConnection() (*DB, error) {
-	err := godotenv.Load()
+	_, b, _, _ := runtime.Caller(0)
+	basePath := filepath.Dir(b)
+	envPath := filepath.Join(basePath, "../../.env")
+
+	err := godotenv.Load(envPath)
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		panic("Error loading .env file")
 	}
 
 	dbHost := os.Getenv("DB_HOST")

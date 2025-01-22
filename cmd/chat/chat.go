@@ -1,4 +1,4 @@
-package main
+package chat
 
 import (
 	"chat-app/internal/bot"
@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"chat-app/internal/auth"
 	"chat-app/internal/messaging"
@@ -20,12 +21,12 @@ import (
 )
 
 var (
-	authRepo     *auth.UserRepository
+	userRepo     *repository.UserRepository
 	chatroomRepo *repository.ChatroomRepository
 	messageRepo  *repository.MessageRepository
 
 	upgrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
+		CheckOrigin: func(_ *http.Request) bool {
 			// Allow connections from all origins (use only in dev!)
 			return true
 		},
@@ -34,7 +35,7 @@ var (
 	chatRabbitMQ *messaging.RabbitMQ
 )
 
-func main() {
+func RunChatServer() error {
 	var err error
 
 	chatRabbitMQ, err = messaging.SetupRabbitMQ("stock_requests", "stock_responses")
@@ -51,7 +52,7 @@ func main() {
 	}
 	defer db.Close()
 
-	authRepo = auth.NewUserRepository(db.Conn)
+	userRepo = repository.NewUserRepository(db.Conn)
 	chatroomRepo = repository.NewChatroomRepository(db.Conn)
 	messageRepo = repository.NewMessageRepository(db.Conn)
 
@@ -65,10 +66,20 @@ func main() {
 	http.HandleFunc("/ws", handleWebSocket)
 	http.Handle("/", http.FileServer(http.Dir("./web/static")))
 
+	server := &http.Server{
+		Addr:         ":8080",
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  15 * time.Second,
+		Handler:      nil,
+	}
+
 	log.Println("Chat server is running on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
+
+	return nil
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +172,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	err = authRepo.Register(ctx, req.Username, req.Password)
+	err = userRepo.Register(ctx, req.Username, req.Password)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -188,7 +199,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	userID, err := authRepo.Authenticate(ctx, req.Username, req.Password)
+	userID, err := userRepo.Authenticate(ctx, req.Username, req.Password)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -201,9 +212,13 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	err = json.NewEncoder(w).Encode(map[string]string{
 		"token": token,
 	})
+	if err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func handleCreateChatroom(w http.ResponseWriter, r *http.Request) {
@@ -230,9 +245,13 @@ func handleCreateChatroom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	err = json.NewEncoder(w).Encode(map[string]interface{}{
 		"chatroom_id": id,
 	})
+	if err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func handleListChatrooms(w http.ResponseWriter, r *http.Request) {
@@ -248,9 +267,13 @@ func handleListChatrooms(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	err = json.NewEncoder(w).Encode(map[string]interface{}{
 		"chatrooms": chatrooms,
 	})
+	if err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func handlePostMessage(w http.ResponseWriter, r *http.Request) {
@@ -285,9 +308,13 @@ func handlePostMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{
+	err = json.NewEncoder(w).Encode(map[string]string{
 		"message": "Message posted successfully",
 	})
+	if err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
 
 func handleGetMessages(w http.ResponseWriter, r *http.Request) {
@@ -315,7 +342,11 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	err = json.NewEncoder(w).Encode(map[string]interface{}{
 		"messages": messages,
 	})
+	if err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }
