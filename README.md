@@ -34,6 +34,8 @@ This project is a browser-based chat application built using Go. It is designed 
 - [PostgreSQL](https://www.postgresql.org/) running (provided in the docker file)
 
 ### Steps
+Create a `.env` file in the root directory based on the provided `.env.example` file.
+
 Work in progress!
 
 ## Testing
@@ -67,18 +69,21 @@ Below are some available Testing Endpoints:
 1. Create a Chatroom:
 >   curl -X POST -H "Content-Type: application/json" \ \
 >   -d '{"name": "General"}' \ \
->   http://localhost:8080/chatroom/create
+>   http://localhost:8080/chatroom/create \ \
+>   -H "Authorization: Bearer \<token>"
  
 1. List all Chatrooms:
-> curl -X GET http://localhost:8080/chatroom/list
+> curl -X GET http://localhost:8080/chatroom/list \ \
+> -H "Authorization: Bearer \<token>"
 
 1. Post a Message to a Chatroom:
 > curl -X POST -H "Content-Type: application/json" \ \
 > -d '{"chatroom_id": 1, "user_id": 1, "content": "Hello, World!"}' \ \
-> http://localhost:8080/chatroom/post_message
+> http://localhost:8080/chatroom/post_message \ \
+> -H "Authorization: Bearer \<token>"
 
 1. Fetch recent Messages from a Chatroom:
-> curl -X GET "http://localhost:8080/chatroom/messages?chatroom_id=1"
-
+> curl -X GET "http://localhost:8080/chatroom/messages?chatroom_id=1" \ \
+> -H "Authorization: Bearer \<token>"
 
 # Work in Progress!

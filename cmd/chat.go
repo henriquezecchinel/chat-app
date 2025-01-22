@@ -40,10 +40,10 @@ func main() {
 
 	http.HandleFunc("/register", handleRegister)
 	http.HandleFunc("/login", handleLogin)
-	http.HandleFunc("/chatroom/create", handleCreateChatroom)
-	http.HandleFunc("/chatroom/list", handleListChatrooms)
-	http.HandleFunc("/chatroom/post_message", handlePostMessage)
-	http.HandleFunc("/chatroom/messages", handleGetMessages)
+	http.Handle("/chatroom/create", auth.AuthMiddleware(http.HandlerFunc(handleCreateChatroom)))
+	http.Handle("/chatroom/list", auth.AuthMiddleware(http.HandlerFunc(handleListChatrooms)))
+	http.Handle("/chatroom/post_message", auth.AuthMiddleware(http.HandlerFunc(handlePostMessage)))
+	http.Handle("/chatroom/messages", auth.AuthMiddleware(http.HandlerFunc(handleGetMessages)))
 
 	// TODO: Add WebSocket handlers for real-time chat functionality.
 
@@ -92,19 +92,28 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+	if err != nil || req.Username == "" || req.Password == "" {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	ctx := context.Background()
-	err = authRepo.Login(ctx, req.Username, req.Password)
+	userID, err := authRepo.Authenticate(ctx, req.Username, req.Password)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	token, err := auth.GenerateJWT(userID, req.Username)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"token": token,
+	})
 }
 
 func handleCreateChatroom(w http.ResponseWriter, r *http.Request) {
@@ -160,20 +169,26 @@ func handlePostMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Extract the authenticated user ID from the context
+	userID, ok := r.Context().Value(auth.UserIDKey).(int)
+	if !ok {
+		http.Error(w, "User not found in context", http.StatusUnauthorized)
+		return
+	}
+
 	var req struct {
 		ChatroomID int    `json:"chatroom_id"`
-		UserID     int    `json:"user_id"`
 		Content    string `json:"content"`
 	}
 
 	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil || req.ChatroomID <= 0 || req.UserID <= 0 || req.Content == "" {
+	if err != nil || req.ChatroomID <= 0 || req.Content == "" {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	ctx := context.Background()
-	err = messageRepo.AddMessage(ctx, req.ChatroomID, req.UserID, req.Content)
+	err = messageRepo.AddMessage(ctx, req.ChatroomID, userID, req.Content)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
