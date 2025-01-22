@@ -52,14 +52,13 @@ If you have issues with dependencies, run `make install` to install the dependen
 4. Start chatting!
 
 #### bot-app
-- The bot application runs on `localhost:8081`.
 - The bot listens to messages in the `stock_requests` queue and responds with stock quotes in the `stock_responses` queue.
 - Simply send the `/stock=stock_code` command in the chatroom to receive stock quotes.
 - Example: `/stock=aapl.us`
 
 
 ## Testing
-Work in progress!
+ - Simply run `make test` to run the tests.
 
 
 ## Notes
