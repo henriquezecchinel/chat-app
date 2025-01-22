@@ -6,17 +6,17 @@ BOT_SERVICE = bot-app
 # Install dependencies
 install:
 	@echo "Installing Go dependencies..."
-	docker exec $(CHAT_SERVICE) go mod tidy
+	go mod tidy
 
 # Run chat application locally in a container
 run-chat:
 	@echo "Starting the chat application using Docker Compose..."
-	$(DOCKER_COMPOSE) up --build chat-app
+	$(DOCKER_COMPOSE) up --build $(CHAT_SERVICE)
 
 # Run bot application locally in a container
 run-bot:
 	@echo "Starting the bot application using Docker Compose..."
-	$(DOCKER_COMPOSE) up --build bot-app
+	$(DOCKER_COMPOSE) up --build $(BOT_SERVICE)
 
 # Stop running containers
 stop:
@@ -27,3 +27,21 @@ stop:
 clean:
 	@echo "Cleaning up Docker resources..."
 	docker system prune -f
+
+# Run linter
+lint:
+	@echo "Running linter..."
+	go mod verify
+	golangci-lint run -c .golangci.yml
+
+# Run linter with --fix flag
+lint-fix:
+	@echo "Running linter with --fix flag..."
+	go mod verify
+	golangci-lint run -c .golangci.yml --fix
+
+# Format code
+format:
+	@echo "Formatting code..."
+	gofmt -s -w .
+	goimports -w .

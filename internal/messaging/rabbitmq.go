@@ -2,10 +2,11 @@ package messaging
 
 import (
 	"fmt"
-	"github.com/joho/godotenv"
-	"github.com/streadway/amqp"
 	"log"
 	"os"
+
+	"github.com/joho/godotenv"
+	"github.com/streadway/amqp"
 )
 
 type RabbitMQ struct {

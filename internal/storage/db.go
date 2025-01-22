@@ -3,8 +3,11 @@ package storage
 import (
 	"database/sql"
 	"fmt"
+	"log"
+	"os"
 
-	_ "github.com/lib/pq"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq" // Required for the PostgreSQL driver
 )
 
 type DB struct {
@@ -26,4 +29,25 @@ func NewDB(connStr string) (*DB, error) {
 
 func (db *DB) Close() error {
 	return db.Conn.Close()
+}
+
+func SetupDatabaseConnection() (*DB, error) {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbName := os.Getenv("DB_NAME")
+
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", dbUser, dbPassword, dbHost, dbPort, dbName)
+	db, err := NewDB(connStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
