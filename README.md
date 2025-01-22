@@ -28,7 +28,10 @@ This project is a browser-based chat application built using Go. It is designed 
 
 ### Prerequisites
 - [Go](https://golang.org/dl/) installed
-- [RabbitMQ](https://www.rabbitmq.com/) running locally or accessible remotely
+- [Docker](https://www.docker.com/) installed
+- [Make](https://www.gnu.org/software/make/manual/make.html/) installed (The README has its commands based on Make, if you don't want to install it, please refer to the Makefile to find the commands)
+- [RabbitMQ](https://www.rabbitmq.com/) running (provided in the docker file)
+- [PostgreSQL](https://www.postgresql.org/) running (provided in the docker file)
 
 ### Steps
 Work in progress!
@@ -47,5 +50,35 @@ Work in progress!
 ## Author
 - [Henrique Zecchinel](mailto:henriquezecchinel@gmail.com)
 
+## Dev Notes
+The app is still being developed, so some features may not be implemented yet. The README will be updated as the project progresses.
 
-Work in Progress!
+Below are some available Testing Endpoints:
+1. Register a User:
+> curl -X POST -H "Content-Type: application/json" \ \
+> -d '{"username": "testuser", "password": "testpass"}' \ \
+> http://localhost:8080/register 
+ 
+1. Login:
+> curl -X POST -H "Content-Type: application/json" \ \
+> -d '{"username": "testuser", "password": "testpass"}' \ \
+> http://localhost:8080/login
+
+1. Create a Chatroom:
+>   curl -X POST -H "Content-Type: application/json" \ \
+>   -d '{"name": "General"}' \ \
+>   http://localhost:8080/chatroom/create
+ 
+1. List all Chatrooms:
+> curl -X GET http://localhost:8080/chatroom/list
+
+1. Post a Message to a Chatroom:
+> curl -X POST -H "Content-Type: application/json" \ \
+> -d '{"chatroom_id": 1, "user_id": 1, "content": "Hello, World!"}' \ \
+> http://localhost:8080/chatroom/post_message
+
+1. Fetch recent Messages from a Chatroom:
+> curl -X GET "http://localhost:8080/chatroom/messages?chatroom_id=1"
+
+
+# Work in Progress!
