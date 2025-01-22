@@ -136,7 +136,7 @@ document.getElementById("chat-form").addEventListener("submit", (e) => {
     const message = { content: messageContent };
     ws.send(JSON.stringify(message));
 
-    document.getElementById("cat-message").value = "";
+    document.getElementById("chat-message").value = "";
 });
 
 async function joinChatroom(chatroomId, chatroomName) {
