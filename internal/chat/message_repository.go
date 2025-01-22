@@ -8,11 +8,11 @@ import (
 )
 
 type Message struct {
-	ID         int
-	ChatroomID int
-	UserID     int
-	Content    string
-	Timestamp  time.Time
+	ID         int       `json:"id"`
+	ChatroomID int       `json:"chatroom_id"`
+	UserID     int       `json:"user_id"`
+	Content    string    `json:"content"`
+	Timestamp  time.Time `json:"timestamp"`
 }
 
 type MessageRepository struct {
