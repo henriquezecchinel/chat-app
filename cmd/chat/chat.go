@@ -7,7 +7,6 @@ import (
 	"chat-app/internal/utils"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -56,6 +55,7 @@ func RunChatServer() error {
 	chatroomRepo = repository.NewChatroomRepository(db.Conn)
 	messageRepo = repository.NewMessageRepository(db.Conn)
 
+	// TODO: Migrate the 'handle' functions to separate files
 	http.HandleFunc("/register", handleRegister)
 	http.HandleFunc("/login", handleLogin)
 	http.Handle("/chatroom/create", auth.Middleware(http.HandlerFunc(handleCreateChatroom)))
@@ -71,7 +71,8 @@ func RunChatServer() error {
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  15 * time.Second,
-		Handler:      nil,
+		// TODO: REMOVE THE CORS MIDDLEWARE FOR PROD ENVIRONMENT
+		Handler: utils.CorsMiddleware(http.DefaultServeMux),
 	}
 
 	log.Println("Chat server is running on http://localhost:8080")
@@ -85,7 +86,7 @@ func RunChatServer() error {
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// IMPORTANT: This code is for demonstration purposes only.
 	// In a real-world application, we should avoid using query parameters for sensitive data such as token.
-	// We can use different approaches like using HTTP Handshake or sending the first message with the Auth details.
+	// TODO: Implement a more secure way to authenticate WebSocket connections [ephemeral access tokens, cookies, etc.]
 	tokenString := r.URL.Query().Get("token")
 	if tokenString == "" {
 		log.Println("Missing token parameter")
@@ -149,7 +150,13 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			chat.BroadcastMessageToChatroom(chatroomID, fmt.Sprintf("User %d: %s", userID, msg.Content))
+			msgToSend := repository.Message{
+				ChatroomID: chatroomID,
+				UserID:     userID,
+				Content:    msg.Content,
+				Timestamp:  time.Now(),
+			}
+			chat.BroadcastMessageToChatroom(chatroomID, msgToSend)
 		}
 	}
 }
@@ -182,6 +189,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
+	// TODO: Implement storing the JWT token in an HttpOnly cookie
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return

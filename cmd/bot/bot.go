@@ -8,7 +8,7 @@ import (
 
 var botRabbitMQ *messaging.RabbitMQ
 
-func RunBot() error {
+func RunBotServer() error {
 	var err error
 
 	botRabbitMQ, err = messaging.SetupRabbitMQ("stock_requests", "stock_responses")

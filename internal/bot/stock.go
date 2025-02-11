@@ -2,6 +2,7 @@ package bot
 
 import (
 	"chat-app/internal/chat"
+	"chat-app/internal/chat/repository"
 	"chat-app/internal/messaging"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/streadway/amqp"
 )
@@ -22,6 +24,8 @@ func FetchStockData(stockCode string) string {
 		return fmt.Sprintf("Invalid stock code: %s", stockCode)
 	}
 
+	// TODO: Move the URL to a config file
+	// TODO: Should we process JSON responses instead of CSV?
 	urlStr := fmt.Sprintf("https://stooq.com/q/l/?s=%s&f=sd2t2ohlcv&h&e=csv", stockCode)
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
@@ -84,7 +88,7 @@ func ConsumeStockResponses(rabbitMQ *messaging.RabbitMQ) {
 	for msg := range msgs {
 		var response struct {
 			ChatroomID int    `json:"chatroom_id"`
-			Message    string `json:"message"`
+			Content    string `json:"content"`
 		}
 
 		if err := json.Unmarshal(msg.Body, &response); err != nil {
@@ -92,7 +96,14 @@ func ConsumeStockResponses(rabbitMQ *messaging.RabbitMQ) {
 			continue
 		}
 
-		chat.BroadcastMessageToChatroom(response.ChatroomID, response.Message)
+		msgToSend := repository.Message{
+			ChatroomID: response.ChatroomID,
+			UserID:     0,
+			Content:    response.Content,
+			Timestamp:  time.Now(),
+		}
+
+		chat.BroadcastMessageToChatroom(response.ChatroomID, msgToSend)
 	}
 }
 
@@ -150,7 +161,7 @@ func ConsumeStockRequests(rabbitMQ *messaging.RabbitMQ) {
 
 		response := map[string]interface{}{
 			"chatroom_id": request.ChatroomID,
-			"message":     stockResponse,
+			"content":     stockResponse,
 		}
 
 		PublishStockResponse(rabbitMQ, response)
