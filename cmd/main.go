@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chat-app/cmd/text"
 	"flag"
 	"fmt"
 	"log"
@@ -30,11 +31,16 @@ func main() {
 		}
 	case "bot":
 		log.Println("Starting Bot Application...")
-		if err := bot.RunBot(); err != nil {
+		if err := bot.RunBotServer(); err != nil {
 			log.Fatalf("Failed to run bot: %v", err)
 		}
+	case "text":
+		log.Println("Starting Text Application...")
+		if err := text.RunTextServer(); err != nil {
+			log.Fatalf("Failed to run text server: %v", err)
+		}
 	default:
-		fmt.Printf("Unknown application '%s'. Available options: 'chat', 'bot'\n", *appType)
+		fmt.Printf("Unknown application '%s'. Available options: 'chat', 'bot', 'text'\n", *appType)
 		os.Exit(1)
 	}
 }
